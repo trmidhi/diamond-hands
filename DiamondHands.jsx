@@ -110,6 +110,25 @@ function formatTime(seconds) {
   return `${mins}:${secs.padStart(4, '0')}`;
 }
 
+/**
+ * Format price with K, M, B suffixes for large numbers
+ */
+function formatPrice(price) {
+  if (price >= 1_000_000_000) {
+    return `$${(price / 1_000_000_000).toFixed(2)}B`;
+  }
+  if (price >= 1_000_000) {
+    return `$${(price / 1_000_000).toFixed(2)}M`;
+  }
+  if (price >= 10_000) {
+    return `$${(price / 1_000).toFixed(2)}K`;
+  }
+  if (price >= 1_000) {
+    return `$${(price / 1_000).toFixed(2)}K`;
+  }
+  return `$${price.toFixed(2)}`;
+}
+
 // ============================================================================
 // PRICE GENERATION ENGINE
 // ============================================================================
@@ -734,7 +753,7 @@ export default function DiamondHands() {
 
     const shareText = `DIAMOND HANDS
 
-Time: ${formatTime(time)} | Exit: $${price.toFixed(2)}
+Time: ${formatTime(time)} | Exit: ${formatPrice(price)}
 ${'◆'.repeat(diamonds)}
 
 Can you beat me?
@@ -755,7 +774,7 @@ ${shareURL}`;
 
     const tweetText = encodeURIComponent(
       `I held for ${formatTime(time)} in DIAMOND HANDS\n\n` +
-      `Exit: $${price.toFixed(2)}\n` +
+      `Exit: ${formatPrice(price)}\n` +
       `${'◆'.repeat(diamonds)}\n\n` +
       `Can you beat me? 💎`
     );
@@ -984,7 +1003,7 @@ ${shareURL}`;
                 : 'none'
             }}
           >
-            ${price.toFixed(2)}
+            {formatPrice(price)}
           </div>
         </div>
 
@@ -1262,7 +1281,7 @@ ${shareURL}`;
                     className="text-2xl font-black"
                     style={{ color: price >= 100 ? '#22c55e' : '#ef4444' }}
                   >
-                    ${price.toFixed(2)}
+                    {formatPrice(price)}
                   </div>
                 </div>
               </div>
@@ -1309,29 +1328,18 @@ ${shareURL}`;
                 </div>
               )}
 
-              {/* Share buttons */}
-              <div className="flex gap-3 mb-4">
-                <button
-                  onClick={handleCopyShare}
-                  className="flex-1 py-3 rounded-xl font-bold text-sm transition-all active:scale-95"
-                  style={{
-                    background: 'linear-gradient(180deg, #374151 0%, #1f2937 100%)',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.3)'
-                  }}
-                >
-                  {copied ? '✓ COPIED!' : 'COPY LINK'}
-                </button>
-                <button
-                  onClick={handleTweetShare}
-                  className="flex-1 py-3 rounded-xl font-bold text-sm transition-all active:scale-95"
-                  style={{
-                    background: 'linear-gradient(180deg, #1d9bf0 0%, #1a8cd8 100%)',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), 0 4px 12px rgba(29, 155, 240, 0.3)'
-                  }}
-                >
-                  SHARE ON X
-                </button>
-              </div>
+              {/* Share button */}
+              <button
+                onClick={handleTweetShare}
+                className="w-full py-4 rounded-xl font-bold text-base transition-all active:scale-95 mb-4"
+                style={{
+                  background: '#000000',
+                  border: '1px solid #333',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 4px 12px rgba(0,0,0,0.5)'
+                }}
+              >
+                SHARE ON X
+              </button>
 
               {/* Action buttons */}
               <div className="flex gap-3">
