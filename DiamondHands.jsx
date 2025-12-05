@@ -605,64 +605,39 @@ export default function DiamondHands() {
   }, []);
 
   // ============================================================================
-  // INPUT HANDLERS
+  // INPUT HANDLERS - Using Pointer Events for reliable touch detection
   // ============================================================================
 
-  const handleMouseDown = useCallback((e) => {
-    e.preventDefault();
-    startHolding();
-  }, [startHolding]);
+  const activePointerIdRef = useRef(null);
 
-  const handleMouseUp = useCallback((e) => {
+  const handlePointerDown = useCallback((e) => {
     e.preventDefault();
-    stopHolding();
-  }, [stopHolding]);
-
-  const handleMouseLeave = useCallback(() => {
-    if (isHolding) {
-      stopHolding();
-    }
-  }, [isHolding, stopHolding]);
-
-  const handleTouchStart = useCallback((e) => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    activeTouchIdRef.current = touch.identifier;
+    // Capture this pointer so we get all its events even if it leaves the element
+    e.target.setPointerCapture(e.pointerId);
+    activePointerIdRef.current = e.pointerId;
     touchHistoryRef.current = [];
-    recordTouch(touch.clientX, touch.clientY);
+    recordTouch(e.clientX, e.clientY);
     startHolding();
   }, [startHolding, recordTouch]);
 
-  const handleTouchMove = useCallback((e) => {
-    const touch = Array.from(e.touches).find(
-      t => t.identifier === activeTouchIdRef.current
-    );
-
-    if (!touch) {
-      stopHolding();
-      return;
+  const handlePointerMove = useCallback((e) => {
+    if (activePointerIdRef.current === e.pointerId) {
+      recordTouch(e.clientX, e.clientY);
     }
+  }, [recordTouch]);
 
-    recordTouch(touch.clientX, touch.clientY);
-  }, [stopHolding, recordTouch]);
-
-  const handleTouchEnd = useCallback((e) => {
-    // Stop if our tracked touch ended OR if no touches remain at all
-    const ourTouchEnded = Array.from(e.changedTouches).some(
-      t => t.identifier === activeTouchIdRef.current
-    );
-    const noTouchesLeft = e.touches.length === 0;
-
-    if (ourTouchEnded || noTouchesLeft) {
-      activeTouchIdRef.current = null;
+  const handlePointerUp = useCallback((e) => {
+    if (activePointerIdRef.current === e.pointerId) {
+      activePointerIdRef.current = null;
       stopHolding();
     }
   }, [stopHolding]);
 
-  const handleTouchCancel = useCallback((e) => {
-    // Touch was cancelled (e.g., too many touches, system gesture)
-    activeTouchIdRef.current = null;
-    stopHolding();
+  const handlePointerCancel = useCallback((e) => {
+    if (activePointerIdRef.current === e.pointerId) {
+      activePointerIdRef.current = null;
+      stopHolding();
+    }
   }, [stopHolding]);
 
   const handleKeyDown = useCallback((e) => {
@@ -690,22 +665,31 @@ export default function DiamondHands() {
     };
   }, [handleKeyDown, handleKeyUp]);
 
-  // Global touch end failsafe - catches touch releases outside the button
+  // Global pointer up failsafe - catches releases if pointer capture fails
   useEffect(() => {
-    const handleGlobalTouchEnd = (e) => {
-      // If we're holding but no touches remain, stop holding
-      if (isHoldingRef.current && e.touches.length === 0) {
-        activeTouchIdRef.current = null;
+    const handleGlobalPointerUp = () => {
+      if (isHoldingRef.current) {
+        activePointerIdRef.current = null;
         stopHolding();
       }
     };
 
-    document.addEventListener('touchend', handleGlobalTouchEnd);
-    document.addEventListener('touchcancel', handleGlobalTouchEnd);
+    // Also listen for visibility change (user switches tabs/apps)
+    const handleVisibilityChange = () => {
+      if (document.hidden && isHoldingRef.current) {
+        activePointerIdRef.current = null;
+        stopHolding();
+      }
+    };
+
+    document.addEventListener('pointerup', handleGlobalPointerUp);
+    document.addEventListener('pointercancel', handleGlobalPointerUp);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      document.removeEventListener('touchend', handleGlobalTouchEnd);
-      document.removeEventListener('touchcancel', handleGlobalTouchEnd);
+      document.removeEventListener('pointerup', handleGlobalPointerUp);
+      document.removeEventListener('pointercancel', handleGlobalPointerUp);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [stopHolding]);
 
@@ -891,10 +875,10 @@ ${shareURL}`;
               border: '1px solid #333'
             }}
           >
-            <div className="text-sm text-gray-500">
-              Scan the QR code or visit on mobile
+            <div className="text-sm text-gray-500 mb-2">
+              Visit this URL on your phone
             </div>
-            <div className="text-yellow-400 font-mono text-sm mt-1">
+            <div className="text-yellow-400 font-mono text-xs break-all">
               {typeof window !== 'undefined' ? window.location.href : ''}
             </div>
           </div>
@@ -1061,15 +1045,13 @@ ${shareURL}`;
                   ? 'inset 0 2px 4px rgba(255,255,255,0.2), inset 0 -2px 4px rgba(0,0,0,0.3), 0 8px 32px rgba(34, 197, 94, 0.4)'
                   : 'inset 0 1px 2px rgba(255,255,255,0.05), inset 0 -1px 2px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.5)',
                 transform: isHolding ? 'scale(0.98)' : 'scale(1)',
-                transition: 'all 0.15s ease-out'
+                transition: 'all 0.15s ease-out',
+                touchAction: 'none' // Prevent browser handling of touch
               }}
-              onMouseDown={handleMouseDown}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              onTouchCancel={handleTouchCancel}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerCancel}
               aria-label={isHolding ? 'Release to sell' : 'Hold to HODL'}
             >
               {/* Inner highlight */}
