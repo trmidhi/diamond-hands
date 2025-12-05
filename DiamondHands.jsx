@@ -632,13 +632,22 @@ export default function DiamondHands() {
   }, [stopHolding, recordTouch]);
 
   const handleTouchEnd = useCallback((e) => {
-    const touch = Array.from(e.changedTouches).find(
+    // Stop if our tracked touch ended OR if no touches remain at all
+    const ourTouchEnded = Array.from(e.changedTouches).some(
       t => t.identifier === activeTouchIdRef.current
     );
+    const noTouchesLeft = e.touches.length === 0;
 
-    if (touch) {
+    if (ourTouchEnded || noTouchesLeft) {
+      activeTouchIdRef.current = null;
       stopHolding();
     }
+  }, [stopHolding]);
+
+  const handleTouchCancel = useCallback((e) => {
+    // Touch was cancelled (e.g., too many touches, system gesture)
+    activeTouchIdRef.current = null;
+    stopHolding();
   }, [stopHolding]);
 
   const handleKeyDown = useCallback((e) => {
@@ -665,6 +674,25 @@ export default function DiamondHands() {
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, [handleKeyDown, handleKeyUp]);
+
+  // Global touch end failsafe - catches touch releases outside the button
+  useEffect(() => {
+    const handleGlobalTouchEnd = (e) => {
+      // If we're holding but no touches remain, stop holding
+      if (isHoldingRef.current && e.touches.length === 0) {
+        activeTouchIdRef.current = null;
+        stopHolding();
+      }
+    };
+
+    document.addEventListener('touchend', handleGlobalTouchEnd);
+    document.addEventListener('touchcancel', handleGlobalTouchEnd);
+
+    return () => {
+      document.removeEventListener('touchend', handleGlobalTouchEnd);
+      document.removeEventListener('touchcancel', handleGlobalTouchEnd);
+    };
+  }, [stopHolding]);
 
   // ============================================================================
   // SHARE HANDLERS
@@ -908,7 +936,14 @@ ${shareURL}`;
 
           <div className="text-right">
             <div className="text-gray-500 text-sm">WAVE</div>
-            <div className={`text-xl font-bold ${isWave ? 'text-yellow-400' : 'text-gray-600'}`}>
+            <div
+              className="text-xl font-bold"
+              style={{
+                color: isWave
+                  ? (waveDirection < 0 ? '#ef4444' : '#22c55e')
+                  : '#525252'
+              }}
+            >
               {isWave ? (waveDirection < 0 ? '↓ DUMP' : '↑ PUMP') : 'CALM'}
             </div>
           </div>
@@ -959,6 +994,7 @@ ${shareURL}`;
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchCancel}
               aria-label={isHolding ? 'Release to sell' : 'Hold to HODL'}
             >
               {/* Inner highlight */}
