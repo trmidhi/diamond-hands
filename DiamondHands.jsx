@@ -271,13 +271,13 @@ function checkEasterEgg(time, exitPercent) {
 // LOCAL STORAGE
 // ============================================================================
 
-function saveBest(time, exitPercent, title, diamonds) {
+function saveBest(time, exitPrice, title, diamonds) {
   try {
     const current = JSON.parse(localStorage.getItem('diamondHandsBest') || 'null');
     if (!current || time > current.time) {
       localStorage.setItem('diamondHandsBest', JSON.stringify({
         time,
-        exitPercent,
+        exitPrice,
         title,
         diamonds,
         date: Date.now()
@@ -308,13 +308,13 @@ function parseURLParams() {
   const params = new URLSearchParams(window.location.search);
   const seed = params.get('s');
   const time = params.get('t');
-  const exitPercent = params.get('p');
+  const exitPrice = params.get('p');
 
   if (seed && time) {
     return {
       seed,
       time: parseFloat(time),
-      exitPercent: exitPercent ? parseFloat(exitPercent) : null,
+      exitPrice: exitPrice ? parseFloat(exitPrice) : null,
       isChallenge: true
     };
   }
@@ -322,13 +322,13 @@ function parseURLParams() {
   return null;
 }
 
-function generateShareURL(seed, time, exitPercent) {
+function generateShareURL(seed, time, exitPrice) {
   if (typeof window === 'undefined') return '';
 
   const params = new URLSearchParams({
     s: seed,
     t: time.toFixed(1),
-    p: exitPercent.toFixed(1)
+    p: exitPrice.toFixed(2)
   });
   return `${window.location.origin}${window.location.pathname}?${params}`;
 }
@@ -542,15 +542,15 @@ export default function DiamondHands() {
 
     // Calculate final stats
     const finalTime = time;
-    const finalPercent = percentChange;
+    const finalPrice = price;
     const titleData = getTitle(finalTime);
     const diamonds = getDiamonds(finalTime);
 
     // Check for new personal best
-    const isNewBest = saveBest(finalTime, finalPercent, titleData.title, diamonds);
+    const isNewBest = saveBest(finalTime, finalPrice, titleData.title, diamonds);
     setNewBest(isNewBest);
     if (isNewBest) {
-      setPersonalBest({ time: finalTime, exitPercent: finalPercent, title: titleData.title, diamonds });
+      setPersonalBest({ time: finalTime, exitPrice: finalPrice, title: titleData.title, diamonds });
     }
 
     // Check challenge result
@@ -559,7 +559,7 @@ export default function DiamondHands() {
     }
 
     setShowResults(true);
-  }, [time, percentChange, challenge]);
+  }, [time, price, challenge]);
 
   const resetGame = useCallback(() => {
     // Reset all game state
@@ -730,11 +730,11 @@ export default function DiamondHands() {
 
   const handleCopyShare = useCallback(async () => {
     const diamonds = getDiamonds(time);
-    const shareURL = generateShareURL(seed, time, percentChange);
+    const shareURL = generateShareURL(seed, time, price);
 
     const shareText = `DIAMOND HANDS
 
-Time: ${formatTime(time)} | Exit: ${percentChange > 0 ? '+' : ''}${percentChange.toFixed(1)}%
+Time: ${formatTime(time)} | Exit: $${price.toFixed(2)}
 ${'◆'.repeat(diamonds)}
 
 Can you beat me?
@@ -747,22 +747,22 @@ ${shareURL}`;
     } catch (e) {
       console.error('Failed to copy:', e);
     }
-  }, [time, percentChange, seed]);
+  }, [time, price, seed]);
 
   const handleTweetShare = useCallback(() => {
     const diamonds = getDiamonds(time);
-    const shareURL = generateShareURL(seed, time, percentChange);
+    const shareURL = generateShareURL(seed, time, price);
 
     const tweetText = encodeURIComponent(
       `I held for ${formatTime(time)} in DIAMOND HANDS\n\n` +
-      `Exit: ${percentChange > 0 ? '+' : ''}${percentChange.toFixed(1)}%\n` +
+      `Exit: $${price.toFixed(2)}\n` +
       `${'◆'.repeat(diamonds)}\n\n` +
       `Can you beat me? 💎`
     );
 
     const tweetURL = `https://twitter.com/intent/tweet?text=${tweetText}&url=${encodeURIComponent(shareURL)}`;
     window.open(tweetURL, '_blank');
-  }, [time, percentChange, seed]);
+  }, [time, price, seed]);
 
   // ============================================================================
   // COMPUTED VALUES
@@ -925,25 +925,17 @@ ${shareURL}`;
     >
       {/* Header - Premium */}
       <header className="p-4 text-center">
-        <div className="relative inline-block">
-          <h1
-            className="text-3xl md:text-4xl font-black tracking-tight"
-            style={{
-              background: 'linear-gradient(180deg, #ffffff 0%, #a1a1aa 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
-            }}
-          >
-            DIAMOND HANDS
-          </h1>
-          <div
-            className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 h-0.5 w-16"
-            style={{
-              background: 'linear-gradient(90deg, transparent, #fbbf24, transparent)'
-            }}
-          />
-        </div>
+        <h1
+          className="text-3xl md:text-4xl font-black tracking-tight"
+          style={{
+            background: 'linear-gradient(180deg, #ffffff 0%, #a1a1aa 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+          }}
+        >
+          DIAMOND HANDS
+        </h1>
         {personalBest && gameState === 'idle' && (
           <div className="text-xs text-gray-600 mt-3 tracking-wide">
             PERSONAL BEST: {formatTime(personalBest.time)}
@@ -964,9 +956,9 @@ ${shareURL}`;
           <div className="text-2xl font-black mt-2">
             BEAT: {formatTime(challenge.time)}
           </div>
-          {challenge.exitPercent !== null && (
+          {challenge.exitPrice !== null && (
             <div className="text-gray-400 mt-1">
-              Their exit: {challenge.exitPercent > 0 ? '+' : ''}{challenge.exitPercent.toFixed(1)}%
+              Their exit: ${challenge.exitPrice.toFixed(2)}
             </div>
           )}
           <div className="text-sm text-gray-500 mt-2">
@@ -984,24 +976,15 @@ ${shareURL}`;
               isVolatile && !prefersReducedMotion ? 'animate-shake' : ''
             }`}
             style={{
-              color: percentChange >= 0 ? '#22c55e' : '#ef4444',
-              textShadow: percentChange >= 50
+              color: price >= 100 ? '#22c55e' : '#ef4444',
+              textShadow: price >= 150
                 ? '0 0 30px rgba(34, 197, 94, 0.5)'
-                : percentChange <= -20
+                : price <= 80
                 ? '0 0 30px rgba(239, 68, 68, 0.5)'
                 : 'none'
             }}
           >
             ${price.toFixed(2)}
-          </div>
-          <div
-            className="text-2xl md:text-3xl font-bold mt-1 transition-all duration-150"
-            style={{
-              color: percentChange >= 0 ? '#22c55e' : '#ef4444',
-              opacity: Math.min(1, 0.7 + Math.abs(percentChange) / 100)
-            }}
-          >
-            {percentChange >= 0 ? '+' : ''}{percentChange.toFixed(2)}%
           </div>
         </div>
 
@@ -1172,14 +1155,6 @@ ${shareURL}`;
           </div>
         )}
 
-        {/* Instructions */}
-        {gameState === 'idle' && !showResults && (
-          <div className="text-center text-gray-500 text-sm mt-4">
-            Hold the button to start. Release = sell. How long can you last?
-            <br />
-            <span className="text-gray-600">Press SPACE or tap to hold</span>
-          </div>
-        )}
       </main>
 
       {/* Results modal - Premium design */}
@@ -1285,9 +1260,9 @@ ${shareURL}`;
                   <div className="text-gray-500 text-xs uppercase tracking-wider mb-1">Exit Price</div>
                   <div
                     className="text-2xl font-black"
-                    style={{ color: percentChange >= 0 ? '#22c55e' : '#ef4444' }}
+                    style={{ color: price >= 100 ? '#22c55e' : '#ef4444' }}
                   >
-                    {percentChange >= 0 ? '+' : ''}{percentChange.toFixed(1)}%
+                    ${price.toFixed(2)}
                   </div>
                 </div>
               </div>
