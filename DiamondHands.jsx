@@ -467,22 +467,33 @@ export default function DiamondHands() {
     setGameState('playing');
   }, [challenge, seed]);
 
+  // Track holding state in ref to avoid stale closures
+  const isHoldingRef = useRef(false);
+
   const startHolding = useCallback(() => {
+    if (isHoldingRef.current) return; // Already holding
+
     if (gameState === 'idle') {
       startGame();
     }
 
-    if (gameState !== 'ended') {
-      startTimeRef.current = startTimeRef.current || performance.now();
+    if (gameState === 'idle' || gameState === 'playing') {
+      startTimeRef.current = performance.now();
+      isHoldingRef.current = true;
       setIsHolding(true);
       lastMovementTimeRef.current = Date.now();
     }
   }, [gameState, startGame]);
 
   const stopHolding = useCallback(() => {
-    if (!isHolding || gameState !== 'playing') return;
+    if (!isHoldingRef.current) return; // Not holding
 
+    isHoldingRef.current = false;
     setIsHolding(false);
+
+    // Only end game if we were playing
+    if (gameState !== 'playing') return;
+
     setGameState('ended');
 
     // Calculate final stats
@@ -510,6 +521,7 @@ export default function DiamondHands() {
     // Reset all game state
     setGameState('idle');
     setIsHolding(false);
+    isHoldingRef.current = false;
     setShowResults(false);
     setChallengeResult(null);
     setTime(0);
@@ -540,6 +552,7 @@ export default function DiamondHands() {
     // Reset all game state
     setGameState('idle');
     setIsHolding(false);
+    isHoldingRef.current = false;
     setShowResults(false);
     setChallengeResult(null);
     setTime(0);
@@ -658,14 +671,13 @@ export default function DiamondHands() {
   // ============================================================================
 
   const handleCopyShare = useCallback(async () => {
-    const titleData = getTitle(time);
     const diamonds = getDiamonds(time);
     const shareURL = generateShareURL(seed, time, percentChange);
 
-    const shareText = `◆ DIAMOND HANDS ◆
+    const shareText = `DIAMOND HANDS
 
 Time: ${formatTime(time)} | Exit: ${percentChange > 0 ? '+' : ''}${percentChange.toFixed(1)}%
-${titleData.title} (${'◆'.repeat(diamonds)})
+${'◆'.repeat(diamonds)}
 
 Can you beat me?
 ${shareURL}`;
@@ -680,15 +692,14 @@ ${shareURL}`;
   }, [time, percentChange, seed]);
 
   const handleTweetShare = useCallback(() => {
-    const titleData = getTitle(time);
     const diamonds = getDiamonds(time);
     const shareURL = generateShareURL(seed, time, percentChange);
 
     const tweetText = encodeURIComponent(
-      `I survived ${formatTime(time)} in DIAMOND HANDS\n\n` +
+      `I held for ${formatTime(time)} in DIAMOND HANDS\n\n` +
       `Exit: ${percentChange > 0 ? '+' : ''}${percentChange.toFixed(1)}%\n` +
-      `${titleData.title} ${'◆'.repeat(diamonds)}\n\n` +
-      `Think you can beat me? 💎🙌`
+      `${'◆'.repeat(diamonds)}\n\n` +
+      `Can you beat me? 💎`
     );
 
     const tweetURL = `https://twitter.com/intent/tweet?text=${tweetText}&url=${encodeURIComponent(shareURL)}`;
@@ -794,14 +805,30 @@ ${shareURL}`;
       className="min-h-screen bg-black text-white flex flex-col select-none overflow-hidden"
       style={{ minHeight: '100dvh' }}
     >
-      {/* Header */}
+      {/* Header - Premium */}
       <header className="p-4 text-center">
-        <h1 className="text-2xl md:text-3xl font-black tracking-wider">
-          ◆ DIAMOND HANDS ◆
-        </h1>
+        <div className="relative inline-block">
+          <h1
+            className="text-3xl md:text-4xl font-black tracking-tight"
+            style={{
+              background: 'linear-gradient(180deg, #ffffff 0%, #a1a1aa 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text'
+            }}
+          >
+            DIAMOND HANDS
+          </h1>
+          <div
+            className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 h-0.5 w-16"
+            style={{
+              background: 'linear-gradient(90deg, transparent, #fbbf24, transparent)'
+            }}
+          />
+        </div>
         {personalBest && gameState === 'idle' && (
-          <div className="text-sm text-gray-500 mt-1">
-            Personal Best: {formatTime(personalBest.time)} ({personalBest.title})
+          <div className="text-xs text-gray-600 mt-3 tracking-wide">
+            PERSONAL BEST: {formatTime(personalBest.time)}
           </div>
         )}
       </header>
@@ -932,7 +959,7 @@ ${shareURL}`;
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
-              aria-label={isHolding ? 'Release to sell' : 'Hold to buy'}
+              aria-label={isHolding ? 'Release to sell' : 'Hold to HODL'}
             >
               {/* Inner highlight */}
               <div
@@ -971,7 +998,7 @@ ${shareURL}`;
                       : 'none'
                   }}
                 >
-                  {isHolding ? '💎 HOLDING 💎' : 'HOLD TO HODL'}
+                  {isHolding ? 'HODLing...' : 'HOLD TO HODL'}
                 </div>
                 {!isHolding && gameState === 'idle' && (
                   <div className="text-xs text-gray-600 mt-2 tracking-wide">
