@@ -350,6 +350,17 @@ export default function DiamondHands() {
     ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
     : false;
 
+  // Detect if device supports touch (mobile check)
+  const [isMobile, setIsMobile] = useState(true); // Default true to avoid flash
+
+  useEffect(() => {
+    // Check for touch capability
+    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    // Also check screen width as backup
+    const isSmallScreen = window.innerWidth <= 768;
+    setIsMobile(hasTouch || isSmallScreen);
+  }, []);
+
   // ============================================================================
   // INITIALIZATION
   // ============================================================================
@@ -831,6 +842,66 @@ ${shareURL}`;
   // ============================================================================
   // RENDER
   // ============================================================================
+
+  // Desktop blocker - game is mobile only
+  if (!isMobile) {
+    return (
+      <div
+        className="min-h-screen bg-black text-white flex flex-col items-center justify-center select-none p-8"
+        style={{ minHeight: '100dvh' }}
+      >
+        <div className="text-center max-w-md">
+          {/* Title */}
+          <h1
+            className="text-4xl md:text-5xl font-black tracking-tight mb-2"
+            style={{
+              background: 'linear-gradient(180deg, #ffffff 0%, #a1a1aa 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text'
+            }}
+          >
+            DIAMOND HANDS
+          </h1>
+          <div
+            className="h-0.5 w-16 mx-auto mb-8"
+            style={{
+              background: 'linear-gradient(90deg, transparent, #fbbf24, transparent)'
+            }}
+          />
+
+          {/* Phone icon */}
+          <div className="text-6xl mb-6">
+            📱
+          </div>
+
+          {/* Message */}
+          <div className="text-xl font-bold text-white mb-3">
+            Mobile Only
+          </div>
+          <p className="text-gray-400 mb-8">
+            This game requires touch controls. Open on your phone to play.
+          </p>
+
+          {/* QR hint */}
+          <div
+            className="inline-block px-6 py-3 rounded-xl"
+            style={{
+              background: 'linear-gradient(180deg, #1f1f1f 0%, #171717 100%)',
+              border: '1px solid #333'
+            }}
+          >
+            <div className="text-sm text-gray-500">
+              Scan the QR code or visit on mobile
+            </div>
+            <div className="text-yellow-400 font-mono text-sm mt-1">
+              {typeof window !== 'undefined' ? window.location.href : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
