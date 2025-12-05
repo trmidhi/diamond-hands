@@ -215,9 +215,12 @@ function createPriceEngine(seed) {
         price = price * (1.10 + rng() * 0.20); // 10-30% instant pump!
       }
 
+      // Calculate percent change from starting price of $100
+      const pctChange = ((price - 100) / 100) * 100;
+
       return {
         price,
-        percentChange: ((price - 100) / 100) * 100,
+        percentChange: pctChange,
         velocity,
         volatility,
         isWave: activeWave !== null,
