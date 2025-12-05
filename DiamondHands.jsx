@@ -123,18 +123,31 @@ function createPriceEngine(seed) {
   let price = 100;
   let velocity = 0;
   let volatility = 1;
+  let lastDumpTime = -999; // Track when last dump happened for recovery pumps
+  let isDumpRecovery = false;
+
+  // Determine if this is a "brutal" game (10% chance - adds RNG variety)
+  const isBrutalGame = rng() < 0.1;
 
   // Pre-generate wave schedule for consistency
   const waveSchedule = [];
-  let nextWaveTime = 8 + rng() * 4; // Start waves earlier
+  let nextWaveTime = 6 + rng() * 4;
+
   for (let i = 0; i < 100; i++) {
+    // After a dump wave, next wave is more likely to be a pump (recovery)
+    const lastWave = waveSchedule[waveSchedule.length - 1];
+    const wasLastDump = lastWave?.direction === -1;
+
+    // 70% pumps normally, 85% pump after a dump (recovery), brutal games have more dumps
+    const pumpChance = isBrutalGame ? 0.5 : (wasLastDump ? 0.85 : 0.70);
+
     waveSchedule.push({
       time: nextWaveTime,
-      intensity: 0.8 + rng() * 1.8, // More intense waves
-      direction: rng() < 0.45 ? -1 : 1, // 55% pumps, 45% dips - more exciting!
-      duration: 2 + rng() * 5 // Shorter, punchier waves
+      intensity: 0.6 + rng() * 1.4,
+      direction: rng() < pumpChance ? 1 : -1,
+      duration: 2 + rng() * 4
     });
-    nextWaveTime += 10 + rng() * 20; // More frequent waves
+    nextWaveTime += 8 + rng() * 15; // Frequent waves
   }
 
   let waveIndex = 0;
@@ -145,6 +158,9 @@ function createPriceEngine(seed) {
       // Check for wave triggers
       if (waveIndex < waveSchedule.length && elapsed >= waveSchedule[waveIndex].time) {
         activeWave = { ...waveSchedule[waveIndex], startTime: elapsed };
+        if (activeWave.direction === -1) {
+          lastDumpTime = elapsed;
+        }
         waveIndex++;
       }
 
@@ -160,34 +176,43 @@ function createPriceEngine(seed) {
         }
       }
 
+      // Check if we're in dump recovery mode (5 seconds after a dump)
+      isDumpRecovery = (elapsed - lastDumpTime) < 5 && (elapsed - lastDumpTime) > 0.5;
+
       // Base volatility increases over time
-      volatility = 1 + (elapsed / 60) * 0.5;
+      volatility = 1 + (elapsed / 60) * 0.4;
 
-      // UPWARD DRIFT - the longer you hold, the more you gain (on average)
-      // Starts small, grows over time to reward diamond hands
-      const upwardDrift = 0.02 + (elapsed / 120) * 0.03; // 0.02-0.05% per tick bias
+      // UPWARD DRIFT - stronger to ensure chart trends up
+      // Extra boost during dump recovery to show that "it always comes back"
+      const baseUpwardDrift = 0.03 + (elapsed / 100) * 0.04;
+      const recoveryBoost = isDumpRecovery ? 0.08 : 0;
+      const upwardDrift = baseUpwardDrift + recoveryBoost;
 
-      // Random micro-movements
-      const noise = (rng() - 0.5) * 2 * volatility;
+      // Random micro-movements (less aggressive)
+      const noise = (rng() - 0.5) * 1.5 * volatility;
 
       // Momentum with decay + upward bias
-      velocity = velocity * 0.95 + noise * 0.3 + waveEffect * 0.5 + upwardDrift;
+      velocity = velocity * 0.93 + noise * 0.25 + waveEffect * 0.6 + upwardDrift;
 
       // Apply movement
       const percentChange = velocity * 0.1;
       price = price * (1 + percentChange / 100);
 
       // Clamp price to prevent going too low
-      price = Math.max(price, 0.01);
+      price = Math.max(price, 10);
 
-      // Random dip events (scary but recoverable - tests your diamond hands)
-      if (elapsed > 20 && rng() < 0.0006 * (elapsed / 60)) {
-        price = price * (0.82 + rng() * 0.12); // 6-18% instant dip - heart pounding!
+      // Random flash crash (rare, scary, but followed by recovery)
+      const crashChance = isBrutalGame ? 0.0008 : 0.0003;
+      if (elapsed > 30 && rng() < crashChance * (elapsed / 60)) {
+        const crashAmount = isBrutalGame ? (0.75 + rng() * 0.15) : (0.85 + rng() * 0.10);
+        price = price * crashAmount;
+        lastDumpTime = elapsed; // Trigger recovery mode
       }
 
-      // Random pump events (reward for holding through the chaos)
-      if (rng() < 0.0004 * (elapsed / 60)) {
-        price = price * (1.08 + rng() * 0.17); // 8-25% instant pump
+      // Random moon pumps (exciting reward moments)
+      const moonChance = isBrutalGame ? 0.0004 : 0.0006;
+      if (rng() < moonChance * (elapsed / 60)) {
+        price = price * (1.10 + rng() * 0.20); // 10-30% instant pump!
       }
 
       return {
@@ -196,7 +221,8 @@ function createPriceEngine(seed) {
         velocity,
         volatility,
         isWave: activeWave !== null,
-        waveDirection: activeWave?.direction || 0
+        waveDirection: activeWave?.direction || 0,
+        isRecovery: isDumpRecovery
       };
     },
 
@@ -209,6 +235,8 @@ function createPriceEngine(seed) {
       velocity = 0;
       waveIndex = 0;
       activeWave = null;
+      lastDumpTime = -999;
+      isDumpRecovery = false;
     }
   };
 }
@@ -949,16 +977,26 @@ ${shareURL}`;
         {/* Price display */}
         <div className="text-center mb-4">
           <div
-            className={`text-5xl md:text-7xl font-black tabular-nums ${
+            className={`text-5xl md:text-7xl font-black tabular-nums transition-all duration-150 ${
               isVolatile && !prefersReducedMotion ? 'animate-shake' : ''
             }`}
-            style={{ color: percentChange >= 0 ? '#22c55e' : '#ef4444' }}
+            style={{
+              color: percentChange >= 0 ? '#22c55e' : '#ef4444',
+              textShadow: percentChange >= 50
+                ? '0 0 30px rgba(34, 197, 94, 0.5)'
+                : percentChange <= -20
+                ? '0 0 30px rgba(239, 68, 68, 0.5)'
+                : 'none'
+            }}
           >
             ${price.toFixed(2)}
           </div>
           <div
-            className="text-2xl md:text-3xl font-bold mt-1"
-            style={{ color: percentChange >= 0 ? '#22c55e' : '#ef4444' }}
+            className="text-2xl md:text-3xl font-bold mt-1 transition-all duration-150"
+            style={{
+              color: percentChange >= 0 ? '#22c55e' : '#ef4444',
+              opacity: Math.min(1, 0.7 + Math.abs(percentChange) / 100)
+            }}
           >
             {percentChange >= 0 ? '+' : ''}{percentChange.toFixed(2)}%
           </div>
@@ -967,43 +1005,71 @@ ${shareURL}`;
         {/* Chart */}
         <div
           ref={chartRef}
-          className="flex-1 min-h-[200px] md:min-h-[300px] max-h-[400px] bg-gray-900/50 rounded-lg mb-4 overflow-hidden"
+          className="flex-1 min-h-[200px] md:min-h-[300px] max-h-[400px] rounded-xl mb-4 overflow-hidden"
+          style={{
+            background: 'linear-gradient(180deg, rgba(17, 17, 17, 0.8) 0%, rgba(0, 0, 0, 0.9) 100%)',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)'
+          }}
         >
           {renderChart()}
         </div>
 
         {/* Timer and stats */}
-        <div className="flex justify-between items-center mb-4 px-2">
+        <div
+          className="flex justify-between items-center mb-4 px-3 py-3 rounded-xl"
+          style={{
+            background: 'linear-gradient(180deg, rgba(26, 26, 26, 0.6) 0%, rgba(17, 17, 17, 0.8) 100%)',
+            border: '1px solid rgba(255, 255, 255, 0.03)'
+          }}
+        >
           <div>
-            <div className="text-gray-500 text-sm">TIME</div>
-            <div className="text-2xl md:text-3xl font-mono font-bold">
+            <div className="text-gray-500 text-xs uppercase tracking-wider mb-1">Time</div>
+            <div className="text-2xl md:text-3xl font-mono font-bold text-white">
               {formatTime(time)}
             </div>
           </div>
 
           <div className="text-center">
             <div
-              className="text-lg font-bold"
-              style={{ color: getTierColor(titleData.tier) }}
+              className="text-base font-bold transition-all duration-300"
+              style={{
+                color: getTierColor(titleData.tier),
+                textShadow: titleData.tier !== 'none' ? `0 0 20px ${getTierColor(titleData.tier)}40` : 'none'
+              }}
             >
               {titleData.title}
             </div>
-            <div className="text-yellow-400">
-              {'◆'.repeat(diamonds)}{'◇'.repeat(10 - diamonds)}
+            <div className="flex justify-center gap-0.5 mt-1">
+              {[...Array(10)].map((_, i) => (
+                <span
+                  key={i}
+                  className="text-sm transition-all duration-200"
+                  style={{
+                    color: i < diamonds ? '#fbbf24' : '#333',
+                    textShadow: i < diamonds ? '0 0 8px rgba(251, 191, 36, 0.4)' : 'none'
+                  }}
+                >
+                  ◆
+                </span>
+              ))}
             </div>
           </div>
 
           <div className="text-right">
-            <div className="text-gray-500 text-sm">WAVE</div>
+            <div className="text-gray-500 text-xs uppercase tracking-wider mb-1">Wave</div>
             <div
-              className="text-xl font-bold"
+              className="text-lg font-bold transition-all duration-200"
               style={{
                 color: isWave
                   ? (waveDirection < 0 ? '#ef4444' : '#22c55e')
-                  : '#525252'
+                  : '#404040',
+                textShadow: isWave
+                  ? (waveDirection < 0 ? '0 0 15px rgba(239, 68, 68, 0.4)' : '0 0 15px rgba(34, 197, 94, 0.4)')
+                  : 'none'
               }}
             >
-              {isWave ? (waveDirection < 0 ? '↓ DUMP' : '↑ PUMP') : 'CALM'}
+              {isWave ? (waveDirection < 0 ? '↓ DUMP' : '↑ PUMP') : '—'}
             </div>
           </div>
         </div>
