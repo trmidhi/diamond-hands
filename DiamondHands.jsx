@@ -323,10 +323,8 @@ export default function DiamondHands() {
   const [challenge, setChallenge] = useState(null);
   const [challengeResult, setChallengeResult] = useState(null);
 
-  // Anti-cheat
-  const [warnings, setWarnings] = useState(0);
-  const [livenessCheck, setLivenessCheck] = useState(null);
-  const [livenessTimer, setLivenessTimer] = useState(0);
+  // Anti-cheat (simple movement reminder)
+  const [showWiggleReminder, setShowWiggleReminder] = useState(false);
 
   // UI state
   const [showResults, setShowResults] = useState(false);
@@ -430,62 +428,29 @@ export default function DiamondHands() {
   }, [gameState, isHolding, isWave, prefersReducedMotion]);
 
   // ============================================================================
-  // ANTI-CHEAT: MOVEMENT CHECK
+  // ANTI-CHEAT: SIMPLE MOVEMENT REMINDER
   // ============================================================================
 
   useEffect(() => {
-    if (!isHolding) return;
+    if (!isHolding) {
+      setShowWiggleReminder(false);
+      return;
+    }
 
     const checkInterval = setInterval(() => {
       const now = Date.now();
       const timeSinceMovement = now - lastMovementTimeRef.current;
 
-      // Warn if no movement for 3+ seconds
-      if (timeSinceMovement > 3000 && touchHistoryRef.current.length > 0) {
-        triggerMovementWarning();
+      // Show gentle reminder if no movement for 5+ seconds (mobile only)
+      if (timeSinceMovement > 5000 && touchHistoryRef.current.length > 0) {
+        setShowWiggleReminder(true);
+      } else {
+        setShowWiggleReminder(false);
       }
-    }, 500);
+    }, 1000);
 
     return () => clearInterval(checkInterval);
   }, [isHolding]);
-
-  // ============================================================================
-  // ANTI-CHEAT: LIVENESS CHECK
-  // ============================================================================
-
-  useEffect(() => {
-    if (gameState !== 'playing' || !isHolding) return;
-
-    // Random liveness check between 20-30 seconds
-    const scheduleCheck = () => {
-      const delay = 20000 + Math.random() * 10000;
-      return setTimeout(() => {
-        triggerLivenessCheck();
-      }, delay);
-    };
-
-    const timeout = scheduleCheck();
-
-    return () => clearTimeout(timeout);
-  }, [gameState, isHolding, livenessCheck]);
-
-  // Liveness check timer countdown
-  useEffect(() => {
-    if (!livenessCheck) return;
-
-    const interval = setInterval(() => {
-      setLivenessTimer(prev => {
-        if (prev <= 0) {
-          // Failed liveness check
-          handleLivenessFail();
-          return 0;
-        }
-        return prev - 0.1;
-      });
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [livenessCheck]);
 
   // ============================================================================
   // GAME ACTIONS
@@ -500,8 +465,7 @@ export default function DiamondHands() {
     setPrice(100);
     setPercentChange(0);
     setPriceHistory([{ time: 0, price: 100 }]);
-    setWarnings(0);
-    setLivenessCheck(null);
+    setShowWiggleReminder(false);
     setChallengeResult(null);
     setShowResults(false);
     setNewBest(false);
@@ -568,8 +532,7 @@ export default function DiamondHands() {
     setPrice(100);
     setPercentChange(0);
     setPriceHistory([{ time: 0, price: 100 }]);
-    setWarnings(0);
-    setLivenessCheck(null);
+    setShowWiggleReminder(false);
     setNewBest(false);
 
     // CRITICAL: Reset the start time ref so next game starts fresh
@@ -599,8 +562,7 @@ export default function DiamondHands() {
     setPrice(100);
     setPercentChange(0);
     setPriceHistory([{ time: 0, price: 100 }]);
-    setWarnings(0);
-    setLivenessCheck(null);
+    setShowWiggleReminder(false);
     setNewBest(false);
 
     // Generate new seed for fresh game
@@ -617,49 +579,16 @@ export default function DiamondHands() {
   }, []);
 
   // ============================================================================
-  // ANTI-CHEAT HANDLERS
+  // TOUCH TRACKING
   // ============================================================================
-
-  const triggerMovementWarning = useCallback(() => {
-    setWarnings(prev => {
-      const newCount = prev + 1;
-      if (newCount >= 3) {
-        // Auto-release after 3 warnings
-        stopHolding();
-      }
-      return newCount;
-    });
-  }, [stopHolding]);
-
-  const triggerLivenessCheck = useCallback(() => {
-    // Generate random target position
-    const target = {
-      x: 20 + Math.random() * 60, // 20-80% of width
-      y: 20 + Math.random() * 60, // 20-80% of height
-      size: 60
-    };
-    setLivenessCheck(target);
-    setLivenessTimer(3); // 3 seconds to respond
-  }, []);
-
-  const handleLivenessSuccess = useCallback(() => {
-    setLivenessCheck(null);
-    setLivenessTimer(0);
-  }, []);
-
-  const handleLivenessFail = useCallback(() => {
-    setLivenessCheck(null);
-    setLivenessTimer(0);
-    stopHolding();
-  }, [stopHolding]);
 
   const recordTouch = useCallback((x, y) => {
     lastMovementTimeRef.current = Date.now();
     touchHistoryRef.current.push({ x, y, time: Date.now() });
 
-    // Keep only last 50 touch points
-    if (touchHistoryRef.current.length > 50) {
-      touchHistoryRef.current = touchHistoryRef.current.slice(-50);
+    // Keep only last 20 touch points
+    if (touchHistoryRef.current.length > 20) {
+      touchHistoryRef.current = touchHistoryRef.current.slice(-20);
     }
   }, []);
 
@@ -798,27 +727,6 @@ ${shareURL}`;
   }, [time, percentChange, seed]);
 
   // ============================================================================
-  // LIVENESS CHECK CLICK
-  // ============================================================================
-
-  const handleLivenessClick = useCallback((e) => {
-    if (!livenessCheck) return;
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-
-    // Check if click is within target
-    const dx = x - livenessCheck.x;
-    const dy = y - livenessCheck.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance < 10) { // Within 10% of screen
-      handleLivenessSuccess();
-    }
-  }, [livenessCheck, handleLivenessSuccess]);
-
-  // ============================================================================
   // COMPUTED VALUES
   // ============================================================================
 
@@ -946,35 +854,6 @@ ${shareURL}`;
         </div>
       )}
 
-      {/* Liveness check overlay */}
-      {livenessCheck && (
-        <div
-          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center"
-          onClick={handleLivenessClick}
-        >
-          <div className="text-center">
-            <div className="text-xl mb-4">PROVE YOU'RE HUMAN</div>
-            <div className="text-4xl font-bold text-yellow-400 mb-4">
-              TAP THE TARGET
-            </div>
-            <div className="text-2xl text-red-500">
-              {livenessTimer.toFixed(1)}s
-            </div>
-          </div>
-
-          {/* Target */}
-          <div
-            className="absolute w-16 h-16 rounded-full border-4 border-yellow-400 animate-pulse cursor-pointer"
-            style={{
-              left: `calc(${livenessCheck.x}% - 32px)`,
-              top: `calc(${livenessCheck.y}% - 32px)`,
-            }}
-          >
-            <div className="absolute inset-2 bg-yellow-400 rounded-full" />
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <header className="p-4 text-center">
         <h1 className="text-2xl md:text-3xl font-black tracking-wider">
@@ -1068,10 +947,10 @@ ${shareURL}`;
           </div>
         </div>
 
-        {/* Warnings */}
-        {warnings > 0 && (
-          <div className="text-center text-red-500 text-sm mb-2">
-            ⚠️ Movement warning ({warnings}/3) - Keep your finger moving!
+        {/* Gentle wiggle reminder for mobile */}
+        {showWiggleReminder && (
+          <div className="text-center text-yellow-400 text-sm mb-2 animate-pulse">
+            👆 Wiggle your finger a bit to stay active
           </div>
         )}
 
