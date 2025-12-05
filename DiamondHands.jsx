@@ -342,6 +342,8 @@ export default function DiamondHands() {
   const lastMovementTimeRef = useRef(0);
   const chartRef = useRef(null);
   const holdButtonRef = useRef(null);
+  const gameStateRef = useRef('idle'); // Sync ref to avoid stale closures
+  const isHoldingRef = useRef(false); // Track holding state synchronously
 
   // Reduced motion preference
   const prefersReducedMotion = typeof window !== 'undefined'
@@ -464,26 +466,25 @@ export default function DiamondHands() {
       priceEngineRef.current = createPriceEngine(seed);
     }
 
+    gameStateRef.current = 'playing';
     setGameState('playing');
   }, [challenge, seed]);
-
-  // Track holding state in ref to avoid stale closures
-  const isHoldingRef = useRef(false);
 
   const startHolding = useCallback(() => {
     if (isHoldingRef.current) return; // Already holding
 
-    if (gameState === 'idle') {
+    // Use ref to check current state (avoids stale closure)
+    if (gameStateRef.current === 'idle') {
       startGame();
     }
 
-    if (gameState === 'idle' || gameState === 'playing') {
+    if (gameStateRef.current === 'idle' || gameStateRef.current === 'playing') {
       startTimeRef.current = performance.now();
       isHoldingRef.current = true;
       setIsHolding(true);
       lastMovementTimeRef.current = Date.now();
     }
-  }, [gameState, startGame]);
+  }, [startGame]);
 
   const stopHolding = useCallback(() => {
     if (!isHoldingRef.current) return; // Not holding
@@ -491,9 +492,10 @@ export default function DiamondHands() {
     isHoldingRef.current = false;
     setIsHolding(false);
 
-    // Only end game if we were playing
-    if (gameState !== 'playing') return;
+    // Use ref to check current state (avoids stale closure)
+    if (gameStateRef.current !== 'playing') return;
 
+    gameStateRef.current = 'ended';
     setGameState('ended');
 
     // Calculate final stats
@@ -515,10 +517,11 @@ export default function DiamondHands() {
     }
 
     setShowResults(true);
-  }, [isHolding, gameState, time, percentChange, challenge]);
+  }, [time, percentChange, challenge]);
 
   const resetGame = useCallback(() => {
     // Reset all game state
+    gameStateRef.current = 'idle';
     setGameState('idle');
     setIsHolding(false);
     isHoldingRef.current = false;
@@ -550,6 +553,7 @@ export default function DiamondHands() {
     }
 
     // Reset all game state
+    gameStateRef.current = 'idle';
     setGameState('idle');
     setIsHolding(false);
     isHoldingRef.current = false;
