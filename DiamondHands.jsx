@@ -122,11 +122,7 @@ function createPriceEngine(seed) {
 
   let price = 100;
   let velocity = 0;
-  let wave = 0;
-  let wavePhase = 0;
   let volatility = 1;
-  let trend = 0;
-  let crashProbability = 0;
 
   // Pre-generate wave schedule for consistency
   const waveSchedule = [];
@@ -135,7 +131,7 @@ function createPriceEngine(seed) {
     waveSchedule.push({
       time: nextWaveTime,
       intensity: 0.5 + rng() * 1.5,
-      direction: rng() < 0.6 ? -1 : 1, // Slightly biased toward dips
+      direction: rng() < 0.35 ? -1 : 1, // 65% pumps, 35% dips - reward holding!
       duration: 3 + rng() * 7
     });
     nextWaveTime += 15 + rng() * 30;
@@ -167,27 +163,31 @@ function createPriceEngine(seed) {
       // Base volatility increases over time
       volatility = 1 + (elapsed / 60) * 0.5;
 
+      // UPWARD DRIFT - the longer you hold, the more you gain (on average)
+      // Starts small, grows over time to reward diamond hands
+      const upwardDrift = 0.02 + (elapsed / 120) * 0.03; // 0.02-0.05% per tick bias
+
       // Random micro-movements
       const noise = (rng() - 0.5) * 2 * volatility;
 
-      // Momentum with decay
-      velocity = velocity * 0.95 + noise * 0.3 + waveEffect * 0.5;
+      // Momentum with decay + upward bias
+      velocity = velocity * 0.95 + noise * 0.3 + waveEffect * 0.5 + upwardDrift;
 
       // Apply movement
       const percentChange = velocity * 0.1;
       price = price * (1 + percentChange / 100);
 
-      // Clamp price to prevent negative
+      // Clamp price to prevent going too low
       price = Math.max(price, 0.01);
 
-      // Random crash events (rare but brutal)
-      if (elapsed > 30 && rng() < 0.0005 * (elapsed / 60)) {
-        price = price * (0.7 + rng() * 0.2); // 10-30% instant crash
+      // Random dip events (scary but recoverable - tests your diamond hands)
+      if (elapsed > 30 && rng() < 0.0003 * (elapsed / 60)) {
+        price = price * (0.85 + rng() * 0.1); // 5-15% instant dip
       }
 
-      // Random pumps (also rare)
-      if (rng() < 0.0003 * (elapsed / 60)) {
-        price = price * (1.1 + rng() * 0.2); // 10-30% instant pump
+      // Random pump events (more common than dips - reward for holding)
+      if (rng() < 0.0005 * (elapsed / 60)) {
+        price = price * (1.1 + rng() * 0.15); // 10-25% instant pump
       }
 
       return {
@@ -219,13 +219,19 @@ function createPriceEngine(seed) {
 
 function checkEasterEgg(time, exitPercent) {
   const roundedPercent = Math.round(exitPercent * 10) / 10;
-  const roundedTime = Math.round(time * 10) / 10;
 
-  if (roundedPercent === -69.0) return 'Nice.';
-  if (roundedPercent === -42.0) return 'The answer was HODL';
-  if (roundedPercent === -99.0) return "At least it's not -100%";
-  if (Math.floor(time) === 69) return 'Nice.';
+  // Positive gains easter eggs (price goes up!)
+  if (roundedPercent === 69.0) return 'Nice gains.';
+  if (roundedPercent === 420.0) return 'Blazed to the moon';
+  if (roundedPercent === 100.0) return 'Double your money!';
+  if (roundedPercent === 1000.0) return '10x LEGEND';
+
+  // Time-based easter eggs
+  if (Math.floor(time) === 69) return 'Nice timing.';
   if (formatTime(time) === '4:20.0') return 'Blazed through that one';
+
+  // Rare negative (if they somehow exit down)
+  if (roundedPercent === -69.0) return 'Nice... wait, wrong direction';
 
   return null;
 }
@@ -553,25 +559,61 @@ export default function DiamondHands() {
   }, [isHolding, gameState, time, percentChange, challenge]);
 
   const resetGame = useCallback(() => {
+    // Reset all game state
     setGameState('idle');
     setIsHolding(false);
     setShowResults(false);
     setChallengeResult(null);
+    setTime(0);
+    setPrice(100);
+    setPercentChange(0);
+    setPriceHistory([{ time: 0, price: 100 }]);
+    setWarnings(0);
+    setLivenessCheck(null);
+    setNewBest(false);
 
-    // Clear challenge if returning to menu
-    if (!challenge) {
-      setChallenge(null);
+    // CRITICAL: Reset the start time ref so next game starts fresh
+    startTimeRef.current = null;
+    lastTickRef.current = 0;
+    touchHistoryRef.current = [];
+
+    // Reset price engine for challenge mode (same seed)
+    if (challenge && priceEngineRef.current) {
+      priceEngineRef.current.reset();
     }
   }, [challenge]);
 
   const startFreshGame = useCallback(() => {
-    // Clear challenge and start new game
+    // Clear challenge and start completely fresh
     setChallenge(null);
     if (typeof window !== 'undefined') {
       window.history.replaceState({}, '', window.location.pathname);
     }
+
+    // Reset all game state
     setGameState('idle');
+    setIsHolding(false);
     setShowResults(false);
+    setChallengeResult(null);
+    setTime(0);
+    setPrice(100);
+    setPercentChange(0);
+    setPriceHistory([{ time: 0, price: 100 }]);
+    setWarnings(0);
+    setLivenessCheck(null);
+    setNewBest(false);
+
+    // Generate new seed for fresh game
+    const newSeed = generateSeed();
+    setSeed(newSeed);
+
+    // Reset refs
+    startTimeRef.current = null;
+    lastTickRef.current = 0;
+    touchHistoryRef.current = [];
+
+    // Create new price engine with new seed
+    priceEngineRef.current = createPriceEngine(newSeed);
   }, []);
 
   // ============================================================================
