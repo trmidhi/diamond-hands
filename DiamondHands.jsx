@@ -126,15 +126,15 @@ function createPriceEngine(seed) {
 
   // Pre-generate wave schedule for consistency
   const waveSchedule = [];
-  let nextWaveTime = 10 + rng() * 5;
+  let nextWaveTime = 8 + rng() * 4; // Start waves earlier
   for (let i = 0; i < 100; i++) {
     waveSchedule.push({
       time: nextWaveTime,
-      intensity: 0.5 + rng() * 1.5,
-      direction: rng() < 0.35 ? -1 : 1, // 65% pumps, 35% dips - reward holding!
-      duration: 3 + rng() * 7
+      intensity: 0.8 + rng() * 1.8, // More intense waves
+      direction: rng() < 0.45 ? -1 : 1, // 55% pumps, 45% dips - more exciting!
+      duration: 2 + rng() * 5 // Shorter, punchier waves
     });
-    nextWaveTime += 15 + rng() * 30;
+    nextWaveTime += 10 + rng() * 20; // More frequent waves
   }
 
   let waveIndex = 0;
@@ -181,13 +181,13 @@ function createPriceEngine(seed) {
       price = Math.max(price, 0.01);
 
       // Random dip events (scary but recoverable - tests your diamond hands)
-      if (elapsed > 30 && rng() < 0.0003 * (elapsed / 60)) {
-        price = price * (0.85 + rng() * 0.1); // 5-15% instant dip
+      if (elapsed > 20 && rng() < 0.0006 * (elapsed / 60)) {
+        price = price * (0.82 + rng() * 0.12); // 6-18% instant dip - heart pounding!
       }
 
-      // Random pump events (more common than dips - reward for holding)
-      if (rng() < 0.0005 * (elapsed / 60)) {
-        price = price * (1.1 + rng() * 0.15); // 10-25% instant pump
+      // Random pump events (reward for holding through the chaos)
+      if (rng() < 0.0004 * (elapsed / 60)) {
+        price = price * (1.08 + rng() * 0.17); // 8-25% instant pump
       }
 
       return {
@@ -331,8 +331,6 @@ export default function DiamondHands() {
   const [newBest, setNewBest] = useState(false);
   const [personalBest, setPersonalBest] = useState(null);
   const [copied, setCopied] = useState(false);
-  const [screenFlash, setScreenFlash] = useState(null);
-  const [waveAnnouncement, setWaveAnnouncement] = useState(null);
 
   // Refs
   const priceEngineRef = useRef(null);
@@ -398,20 +396,6 @@ export default function DiamondHands() {
         if (elapsed - lastTickRef.current >= 0.1) {
           lastTickRef.current = elapsed;
           setPriceHistory(prev => [...prev, { time: elapsed, price: update.price }]);
-
-          // Screen flash for big moves
-          if (!prefersReducedMotion) {
-            const lastPrice = priceHistory[priceHistory.length - 1]?.price || 100;
-            const change = ((update.price - lastPrice) / lastPrice) * 100;
-            if (Math.abs(change) > 3) {
-              flashScreen(change > 0 ? 'green' : 'red');
-            }
-          }
-        }
-
-        // Wave announcements
-        if (update.isWave && !isWave) {
-          announceWave(update.waveDirection);
         }
       }
 
@@ -425,7 +409,7 @@ export default function DiamondHands() {
         cancelAnimationFrame(gameLoopRef.current);
       }
     };
-  }, [gameState, isHolding, isWave, prefersReducedMotion]);
+  }, [gameState, isHolding]);
 
   // ============================================================================
   // ANTI-CHEAT: SIMPLE MOVEMENT REMINDER
@@ -670,21 +654,6 @@ export default function DiamondHands() {
   }, [handleKeyDown, handleKeyUp]);
 
   // ============================================================================
-  // VISUAL EFFECTS
-  // ============================================================================
-
-  const flashScreen = useCallback((color) => {
-    setScreenFlash(color);
-    setTimeout(() => setScreenFlash(null), 100);
-  }, []);
-
-  const announceWave = useCallback((direction) => {
-    const text = direction < 0 ? 'DUMP INCOMING' : 'PUMP DETECTED';
-    setWaveAnnouncement(text);
-    setTimeout(() => setWaveAnnouncement(null), 2000);
-  }, []);
-
-  // ============================================================================
   // SHARE HANDLERS
   // ============================================================================
 
@@ -825,35 +794,6 @@ ${shareURL}`;
       className="min-h-screen bg-black text-white flex flex-col select-none overflow-hidden"
       style={{ minHeight: '100dvh' }}
     >
-      {/* Screen flash overlay */}
-      {screenFlash && !prefersReducedMotion && (
-        <div
-          className="fixed inset-0 pointer-events-none z-50 transition-opacity"
-          style={{
-            backgroundColor: screenFlash === 'red'
-              ? 'rgba(239, 68, 68, 0.2)'
-              : 'rgba(34, 197, 94, 0.2)'
-          }}
-        />
-      )}
-
-      {/* Wave announcement */}
-      {waveAnnouncement && !prefersReducedMotion && (
-        <div
-          className="fixed inset-0 flex items-center justify-center pointer-events-none z-40"
-        >
-          <div
-            className="text-4xl md:text-6xl font-black tracking-wider"
-            style={{
-              color: waveAnnouncement.includes('DUMP') ? '#ef4444' : '#22c55e',
-              animation: 'wave-enter 2s ease-out forwards'
-            }}
-          >
-            {waveAnnouncement}
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <header className="p-4 text-center">
         <h1 className="text-2xl md:text-3xl font-black tracking-wider">
@@ -954,30 +894,93 @@ ${shareURL}`;
           </div>
         )}
 
-        {/* Hold button */}
+        {/* Hold button - Premium game style */}
         {!showResults && (
-          <button
-            ref={holdButtonRef}
-            className={`
-              w-full py-8 md:py-10 rounded-xl font-black text-2xl md:text-3xl uppercase tracking-wider
-              transition-all duration-150 outline-none
-              ${isHolding
-                ? 'bg-gradient-to-b from-green-600 to-green-800 text-white shadow-lg shadow-green-500/30 scale-[0.98]'
-                : 'bg-gray-800 text-gray-300 border-2 border-gray-600 hover:border-gray-500'
-              }
-              ${!isHolding && !prefersReducedMotion ? 'animate-pulse-border' : ''}
-              focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-2 focus-visible:ring-offset-black
-            `}
-            onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseLeave}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            aria-label={isHolding ? 'Release to sell' : 'Hold to buy'}
-          >
-            {isHolding ? '💎 HOLDING 💎' : 'HOLD TO HODL'}
-          </button>
+          <div className="relative">
+            {/* Outer glow ring when holding */}
+            {isHolding && (
+              <div
+                className="absolute inset-0 rounded-2xl animate-pulse"
+                style={{
+                  background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%)',
+                  filter: 'blur(20px)',
+                  opacity: 0.6,
+                  transform: 'scale(1.1)'
+                }}
+              />
+            )}
+            <button
+              ref={holdButtonRef}
+              className="relative w-full outline-none focus-visible:ring-2 focus-visible:ring-yellow-400"
+              style={{
+                padding: isHolding ? '2rem 1rem' : '2.5rem 1rem',
+                borderRadius: '1rem',
+                border: isHolding ? 'none' : '2px solid transparent',
+                background: isHolding
+                  ? 'linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)'
+                  : 'linear-gradient(180deg, #1f1f1f 0%, #171717 100%)',
+                backgroundClip: 'padding-box',
+                boxShadow: isHolding
+                  ? 'inset 0 2px 4px rgba(255,255,255,0.2), inset 0 -2px 4px rgba(0,0,0,0.3), 0 8px 32px rgba(34, 197, 94, 0.4)'
+                  : 'inset 0 1px 2px rgba(255,255,255,0.05), inset 0 -1px 2px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.5)',
+                transform: isHolding ? 'scale(0.98)' : 'scale(1)',
+                transition: 'all 0.15s ease-out'
+              }}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseLeave}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              aria-label={isHolding ? 'Release to sell' : 'Hold to buy'}
+            >
+              {/* Inner highlight */}
+              <div
+                className="absolute inset-0 rounded-2xl pointer-events-none"
+                style={{
+                  background: isHolding
+                    ? 'linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 50%)'
+                    : 'linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 30%)',
+                  borderRadius: '1rem'
+                }}
+              />
+
+              {/* Button border gradient */}
+              {!isHolding && (
+                <div
+                  className="absolute inset-0 rounded-2xl pointer-events-none"
+                  style={{
+                    padding: '2px',
+                    background: 'linear-gradient(180deg, #404040 0%, #262626 100%)',
+                    WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                    WebkitMaskComposite: 'xor',
+                    maskComposite: 'exclude',
+                    borderRadius: '1rem'
+                  }}
+                />
+              )}
+
+              {/* Button text */}
+              <div className="relative">
+                <div
+                  className="font-black text-2xl md:text-3xl uppercase tracking-widest"
+                  style={{
+                    color: isHolding ? '#ffffff' : '#a1a1aa',
+                    textShadow: isHolding
+                      ? '0 2px 4px rgba(0,0,0,0.3), 0 0 20px rgba(255,255,255,0.2)'
+                      : 'none'
+                  }}
+                >
+                  {isHolding ? '💎 HOLDING 💎' : 'HOLD TO HODL'}
+                </div>
+                {!isHolding && gameState === 'idle' && (
+                  <div className="text-xs text-gray-600 mt-2 tracking-wide">
+                    TAP AND HOLD
+                  </div>
+                )}
+              </div>
+            </button>
+          </div>
         )}
 
         {/* Instructions */}
@@ -990,118 +993,207 @@ ${shareURL}`;
         )}
       </main>
 
-      {/* Results modal */}
+      {/* Results modal - Premium design */}
       {showResults && (
-        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4">
           <div
-            className="w-full max-w-md bg-gray-900 rounded-2xl p-6 text-center"
+            className="w-full max-w-md relative overflow-hidden"
             style={{
-              border: challengeResult ? '3px solid #fbbf24' : '2px solid #333'
+              background: 'linear-gradient(180deg, #1a1a1a 0%, #0d0d0d 100%)',
+              borderRadius: '1.5rem',
+              boxShadow: challengeResult
+                ? '0 0 60px rgba(251, 191, 36, 0.3), inset 0 1px 0 rgba(255,255,255,0.1)'
+                : '0 25px 50px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)'
             }}
           >
-            {/* Challenge result */}
-            {challengeResult && (
-              <div className={`text-4xl md:text-5xl font-black mb-4 ${
-                challengeResult === 'win' ? 'text-green-400' : 'text-red-400'
-              }`}>
-                {challengeResult === 'win' ? '🏆 YOU WIN! 🏆' : '😭 THEY WIN 😭'}
-              </div>
-            )}
-
-            {/* Title */}
+            {/* Decorative top border gradient */}
             <div
-              className="text-2xl md:text-3xl font-black mb-2"
-              style={{ color: getTierColor(titleData.tier) }}
-            >
-              {titleData.title}
-            </div>
+              className="absolute top-0 left-0 right-0 h-1"
+              style={{
+                background: challengeResult
+                  ? 'linear-gradient(90deg, transparent, #fbbf24, transparent)'
+                  : `linear-gradient(90deg, transparent, ${getTierColor(titleData.tier)}, transparent)`
+              }}
+            />
 
-            {/* Diamonds */}
-            <div className="text-3xl text-yellow-400 mb-4">
-              {'◆'.repeat(diamonds)}
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="bg-black/50 rounded-lg p-3">
-                <div className="text-gray-500 text-sm">TIME</div>
-                <div className="text-2xl font-bold">{formatTime(time)}</div>
-              </div>
-              <div className="bg-black/50 rounded-lg p-3">
-                <div className="text-gray-500 text-sm">EXIT</div>
+            <div className="p-6 text-center">
+              {/* Challenge result */}
+              {challengeResult && (
                 <div
-                  className="text-2xl font-bold"
-                  style={{ color: percentChange >= 0 ? '#22c55e' : '#ef4444' }}
+                  className="mb-6"
+                  style={{
+                    background: challengeResult === 'win'
+                      ? 'linear-gradient(180deg, rgba(34, 197, 94, 0.2) 0%, transparent 100%)'
+                      : 'linear-gradient(180deg, rgba(239, 68, 68, 0.2) 0%, transparent 100%)',
+                    margin: '-1.5rem -1.5rem 1.5rem -1.5rem',
+                    padding: '1.5rem'
+                  }}
                 >
-                  {percentChange >= 0 ? '+' : ''}{percentChange.toFixed(1)}%
-                </div>
-              </div>
-            </div>
-
-            {/* Challenge comparison */}
-            {challenge && (
-              <div className="bg-yellow-400/10 border border-yellow-400/30 rounded-lg p-3 mb-4">
-                <div className="text-yellow-400 text-sm mb-1">CHALLENGE COMPARISON</div>
-                <div className="flex justify-center items-center gap-4">
-                  <div>
-                    <div className="text-xs text-gray-400">YOU</div>
-                    <div className="font-bold">{formatTime(time)}</div>
-                  </div>
-                  <div className="text-gray-500">vs</div>
-                  <div>
-                    <div className="text-xs text-gray-400">THEM</div>
-                    <div className="font-bold">{formatTime(challenge.time)}</div>
+                  <div
+                    className="text-4xl md:text-5xl font-black"
+                    style={{
+                      color: challengeResult === 'win' ? '#22c55e' : '#ef4444',
+                      textShadow: challengeResult === 'win'
+                        ? '0 0 30px rgba(34, 197, 94, 0.5)'
+                        : '0 0 30px rgba(239, 68, 68, 0.5)'
+                    }}
+                  >
+                    {challengeResult === 'win' ? 'YOU WIN' : 'THEY WIN'}
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Easter egg */}
-            {easterEgg && (
-              <div className="text-yellow-400 italic mb-4">
-                "{easterEgg}"
-              </div>
-            )}
-
-            {/* New best */}
-            {newBest && (
-              <div className="text-green-400 font-bold mb-4">
-                🎉 NEW PERSONAL BEST! 🎉
-              </div>
-            )}
-
-            {/* Share buttons */}
-            <div className="flex gap-2 mb-4">
-              <button
-                onClick={handleCopyShare}
-                className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-bold transition-colors"
-              >
-                {copied ? '✓ COPIED!' : '📋 COPY LINK'}
-              </button>
-              <button
-                onClick={handleTweetShare}
-                className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-bold transition-colors"
-              >
-                🐦 TWEET
-              </button>
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex gap-2">
-              <button
-                onClick={resetGame}
-                className="flex-1 py-3 bg-yellow-500 hover:bg-yellow-400 text-black rounded-lg font-bold transition-colors"
-              >
-                {challenge ? 'TRY AGAIN' : 'PLAY AGAIN'}
-              </button>
-              {challenge && (
-                <button
-                  onClick={startFreshGame}
-                  className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-bold transition-colors"
-                >
-                  NEW GAME
-                </button>
               )}
+
+              {/* Title with glow */}
+              <div className="mb-3">
+                <div
+                  className="text-2xl md:text-3xl font-black tracking-wide"
+                  style={{
+                    color: getTierColor(titleData.tier),
+                    textShadow: `0 0 20px ${getTierColor(titleData.tier)}40`
+                  }}
+                >
+                  {titleData.title}
+                </div>
+              </div>
+
+              {/* Diamonds row */}
+              <div className="flex justify-center items-center gap-1 mb-6">
+                {[...Array(10)].map((_, i) => (
+                  <span
+                    key={i}
+                    className="text-2xl"
+                    style={{
+                      color: i < diamonds ? '#fbbf24' : '#333',
+                      textShadow: i < diamonds ? '0 0 10px rgba(251, 191, 36, 0.5)' : 'none',
+                      transition: 'all 0.3s ease',
+                      transitionDelay: `${i * 50}ms`
+                    }}
+                  >
+                    ◆
+                  </span>
+                ))}
+              </div>
+
+              {/* Stats cards */}
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                <div
+                  className="rounded-xl p-4"
+                  style={{
+                    background: 'linear-gradient(180deg, #262626 0%, #1a1a1a 100%)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 4px 12px rgba(0,0,0,0.3)'
+                  }}
+                >
+                  <div className="text-gray-500 text-xs uppercase tracking-wider mb-1">Time Held</div>
+                  <div className="text-2xl font-black text-white">{formatTime(time)}</div>
+                </div>
+                <div
+                  className="rounded-xl p-4"
+                  style={{
+                    background: 'linear-gradient(180deg, #262626 0%, #1a1a1a 100%)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 4px 12px rgba(0,0,0,0.3)'
+                  }}
+                >
+                  <div className="text-gray-500 text-xs uppercase tracking-wider mb-1">Exit Price</div>
+                  <div
+                    className="text-2xl font-black"
+                    style={{ color: percentChange >= 0 ? '#22c55e' : '#ef4444' }}
+                  >
+                    {percentChange >= 0 ? '+' : ''}{percentChange.toFixed(1)}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Challenge comparison */}
+              {challenge && (
+                <div
+                  className="rounded-xl p-4 mb-5"
+                  style={{
+                    background: 'linear-gradient(180deg, rgba(251, 191, 36, 0.1) 0%, transparent 100%)',
+                    border: '1px solid rgba(251, 191, 36, 0.2)'
+                  }}
+                >
+                  <div className="text-yellow-400/70 text-xs uppercase tracking-wider mb-3">Challenge</div>
+                  <div className="flex justify-center items-center gap-6">
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">YOU</div>
+                      <div className="text-xl font-bold text-white">{formatTime(time)}</div>
+                    </div>
+                    <div className="text-2xl text-gray-600">⚔</div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">THEM</div>
+                      <div className="text-xl font-bold text-gray-400">{formatTime(challenge.time)}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Easter egg */}
+              {easterEgg && (
+                <div className="text-yellow-400/80 italic text-sm mb-4">"{easterEgg}"</div>
+              )}
+
+              {/* New best badge */}
+              {newBest && (
+                <div
+                  className="inline-block px-4 py-2 rounded-full text-sm font-bold mb-5"
+                  style={{
+                    background: 'linear-gradient(180deg, #22c55e 0%, #16a34a 100%)',
+                    boxShadow: '0 4px 15px rgba(34, 197, 94, 0.4)'
+                  }}
+                >
+                  ★ NEW PERSONAL BEST ★
+                </div>
+              )}
+
+              {/* Share buttons */}
+              <div className="flex gap-3 mb-4">
+                <button
+                  onClick={handleCopyShare}
+                  className="flex-1 py-3 rounded-xl font-bold text-sm transition-all active:scale-95"
+                  style={{
+                    background: 'linear-gradient(180deg, #374151 0%, #1f2937 100%)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.3)'
+                  }}
+                >
+                  {copied ? '✓ COPIED!' : 'COPY LINK'}
+                </button>
+                <button
+                  onClick={handleTweetShare}
+                  className="flex-1 py-3 rounded-xl font-bold text-sm transition-all active:scale-95"
+                  style={{
+                    background: 'linear-gradient(180deg, #1d9bf0 0%, #1a8cd8 100%)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), 0 4px 12px rgba(29, 155, 240, 0.3)'
+                  }}
+                >
+                  SHARE ON X
+                </button>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={resetGame}
+                  className="flex-1 py-4 rounded-xl font-black text-black transition-all active:scale-95"
+                  style={{
+                    background: 'linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)',
+                    boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.3), 0 4px 15px rgba(251, 191, 36, 0.4)'
+                  }}
+                >
+                  {challenge ? 'TRY AGAIN' : 'PLAY AGAIN'}
+                </button>
+                {challenge && (
+                  <button
+                    onClick={startFreshGame}
+                    className="flex-1 py-4 rounded-xl font-bold transition-all active:scale-95"
+                    style={{
+                      background: 'linear-gradient(180deg, #374151 0%, #1f2937 100%)',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.3)'
+                    }}
+                  >
+                    NEW GAME
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1109,15 +1201,6 @@ ${shareURL}`;
 
       {/* Global styles */}
       <style>{`
-        @keyframes pulse-border {
-          0%, 100% { border-color: #404040; }
-          50% { border-color: #737373; }
-        }
-
-        .animate-pulse-border {
-          animation: pulse-border 2s ease-in-out infinite;
-        }
-
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
           25% { transform: translateX(-2px); }
@@ -1128,14 +1211,7 @@ ${shareURL}`;
           animation: shake 0.1s linear infinite;
         }
 
-        @keyframes wave-enter {
-          0% { transform: scale(2); opacity: 0; }
-          50% { transform: scale(1); opacity: 1; }
-          100% { transform: scale(1); opacity: 0; }
-        }
-
         @media (prefers-reduced-motion: reduce) {
-          .animate-pulse-border,
           .animate-shake {
             animation: none;
           }
@@ -1147,7 +1223,7 @@ ${shareURL}`;
           -webkit-touch-callout: none;
         }
 
-        /* Ensure the hold button is large enough on mobile */
+        /* Mobile font sizing */
         @media (max-width: 640px) {
           .text-5xl { font-size: 2.5rem; }
           .text-7xl { font-size: 2.5rem; }
